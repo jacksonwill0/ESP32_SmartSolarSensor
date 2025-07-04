@@ -65,15 +65,16 @@ void calcFlowRate(){
 void calcBattery(){
   // Battery voltage readout
   uint32_t Vbatt = 0;
-  for(int i = 0; i < 32; i++) {
+  for(int i = 0; i < 16; i++) {
     Vbatt += analogReadMilliVolts(A0); // Read and accumulate ADC voltage
+    delay(50); // Small delay to allow ADC to stabilize
   }
-  float Vbattf = 2 * Vbatt / 32 / 1000.0;     // Adjust for 1:2 divider and convert to volts
+  float Vbattf = 2 * Vbatt / 16 / 1000.0;     // Adjust for 1:2 divider and convert to volts
   Serial1.printf("Battery: %0.3f V\r\n", Vbattf);                  // Output voltage to 3 decimal places
 
   int battPercentage = round(123-123/pow((1+pow(Vbattf/3.7,80)),0.165));
   Serial1.printf("Battery: %d %% \r\n", battPercentage);                  // Output voltage to 3 decimal places
-  zbFlowSensor.setBatteryPercentage(battPercentage);
+  zbFlowSensor.setBatteryPercentage(battPercentage); 
 }
 
 // Internal Led flash
