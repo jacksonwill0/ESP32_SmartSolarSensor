@@ -9,7 +9,7 @@ volatile int pulseCount = 0;  // Variable to count the number of pulses in the l
 unsigned long lastTime = 0;   // Variable to track the last time the flow rate was calculated
 double totalLiters = 0;       // Total volume of water passed in liters
 
-const int flowMeterPin = D10;          // Define the pin connected to the flow meter
+uint8_t flowMeterPin = D10;          // Define the pin connected to the flow meter
 const double pulsesPerLiter = 5880.0;  // Number of pulses per liter (adjust as needed)
 float counter = 0;
 
@@ -108,7 +108,7 @@ void measureAndSleep() {
   Serial1.flush();
   Serial.println("Going to sleep now");
   Serial.flush();
-  //esp_deep_sleep_start();
+  esp_deep_sleep_start();
 }
 
 /*
@@ -153,10 +153,12 @@ void setup() {
   Serial1.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) + " Seconds");
   Serial.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) + " Seconds");
 
-  // Battery voltage readout
+  // Init Battery voltage readout
   pinMode(A0, INPUT);  // Configure A0 as ADC input
   // Init button switch
   pinMode(button, INPUT_PULLUP);
+  // Set analog resolution to 10 bits
+  analogReadResolution(10);
   // Optional: set Zigbee device name and model
   zbAnalogDevice.setManufacturerAndModel("Espressif", "ZigbeeFlowSensor_voltage");
   // Set up analog input
@@ -164,8 +166,6 @@ void setup() {
   zbAnalogDevice.setAnalogInputApplication(ESP_ZB_ZCL_AI_FLOW_PRIMARY_CHILLED_WATER);
   zbAnalogDevice.setAnalogInputDescription("Water flow (L/s)");
   zbAnalogDevice.setAnalogInputResolution(0.001);
-  // Optional: Add reporting for analog input
-  zbAnalogDevice.setAnalogInputReporting(0, 30, 10);  // report every 30 seconds if value changes by 10
   zbAnalogDevice.setPowerSource(ZB_POWER_SOURCE_BATTERY, 100);
   // Add endpoints to Zigbee Core
   Zigbee.addEndpoint(&zbAnalogDevice);
@@ -194,6 +194,10 @@ void setup() {
   Serial.println("Successfully connected to Zigbee network");
   // Delay approx 1s (may be adjusted) to allow establishing proper connection with coordinator, needed for sleepy devices
   delay(1000);
+  
+  // Optional: Add reporting for analog input
+  //zbAnalogDevice.setAnalogInputReporting(0, 30, 10);  // report every 30 seconds if value changes by 10
+  //zbAnalogDevice.setReporting(0, 10, 0.01);
 
   // Attach interrupt to the flow meter pin
   pinMode(flowMeterPin, INPUT);
