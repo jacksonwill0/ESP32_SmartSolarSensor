@@ -23,7 +23,7 @@ void IRAM_ATTR pulse() {
   Definitions for Deepsleep
 */
 #define BUTTON_PIN_BITMASK (1ULL << GPIO_NUM_0) // GPIO 0 bitmask for ext1
-#define uint8_t wakeupPin = GPIO0;
+#define uint8_t wakeupPin = D10;
 #define uS_TO_S_FACTOR 1000000ULL /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 895 /* Sleep for 55s will + 5s delay for establishing connection => data reported every 1 minute */
 
@@ -46,16 +46,11 @@ uint8_t button = BOOT_PIN;
 //------------------------------------------------------------//
 
 void calcFlowRate() {
-  unsigned long currentTime = millis();  // Get the current time
-  //------------------------------ Flow Sensor ------------------------------//
-  double flowRate = (pulseCount / pulsesPerLiter) * 60.0;   // Calculate flow rate in liters per minute
-
-  totalLiters += (pulseCount / pulsesPerLiter);   // Calculate total volume in liters
+  double flowRate = (pulseCount / pulsesPerLiter);   // Calculate flow rate in liters per second
+  totalLiters += flowRate;   // Calculate total volume in liters
 
   pulseCount = 0;   // Reset pulse count for the next second
 
-  // Update last time
-  lastTime = currentTime;
   Serial1.printf("Updating flow sensor value to %.3f L/min\r\n", flowRate);
   Serial.printf("Updating flow sensor value to %.3f L/min\r\n", flowRate);
   zbAnalogDevice.setAnalogInput(flowRate);
@@ -237,7 +232,9 @@ void loop() {
     }
   }
 
-  //------------------------------ meausureAndSleep ------------------------------//
-  measureAndSleep();
-  delay(5000);  // will not be called, when deepsleep is used
+  unsigned long currentTime = millis();  // Get the current time
+  if(currentTime >= (lastTime + 1000)) { 
+    lastTime = currentTime;	  // Update last time
+    measureAndSleep();
+  }
 }
