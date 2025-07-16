@@ -51,8 +51,8 @@ void calcFlowRate() {
 
   pulseCount = 0;   // Reset pulse count for the next second
 
-  Serial1.printf("Updating flow sensor value to %.3f L/min\r\n", flowRate);
-  Serial.printf("Updating flow sensor value to %.3f L/min\r\n", flowRate);
+  Serial1.printf("Updating flow sensor value to %.3f L/s\r\n", flowRate);
+  Serial.printf("Updating flow sensor value to %.3f L/s\r\n", flowRate);
   zbAnalogDevice.setAnalogInput(flowRate);
 }
 
