@@ -5,10 +5,12 @@
 #include "Zigbee.h"
 #include <Wire.h>
 
+/*
+  Definitions for FLow-Sensor calculation
+*/
 volatile int pulseCount = 0;  // Variable to count the number of pulses in the last second
 unsigned long lastTime = 0;   // Variable to track the last time the flow rate was calculated
 double totalLiters = 0;       // Total volume of water passed in liters
-
 uint8_t flowMeterPin = D10;          // Define the pin connected to the flow meter
 const double pulsesPerLiter = 5880.0;  // Number of pulses per liter (adjust as needed)
 float counter = 0;
@@ -17,20 +19,27 @@ void IRAM_ATTR pulse() {
   pulseCount++;  // Increment pulse count for each pulse detected
 }
 
-/* Zigbee sensor configuration */
-#define ANALOG_DEVICE_ENDPOINT_NUMBER 11
-
+/*
+  Definitions for Deepsleep
+*/
+#define BUTTON_PIN_BITMASK (1ULL << GPIO_NUM_0) // GPIO 0 bitmask for ext1
+#define uint8_t wakeupPin = GPIO0;
 #define uS_TO_S_FACTOR 1000000ULL /* Conversion factor for micro seconds to seconds */
-
-/*Define sleeptimer*/
 #define TIME_TO_SLEEP 895 /* Sleep for 55s will + 5s delay for establishing connection => data reported every 1 minute */
 
+RTC_DATA_ATTR int bootCount = 0; // RTC memory to store boot count (will be preserved during deep sleep)
 
-uint8_t button = BOOT_PIN;
-
-RTC_DATA_ATTR int bootCount = 0;
+/*
+  Definitions for Zigbee
+*/
+#define ANALOG_DEVICE_ENDPOINT_NUMBER 11
 
 ZigbeeAnalog zbAnalogDevice = ZigbeeAnalog(ANALOG_DEVICE_ENDPOINT_NUMBER);
+
+/*
+  Definitions for misc
+*/
+uint8_t button = BOOT_PIN;
 
 //------------------------------------------------------------//
 //------------------------------ Functions ------------------------------//
@@ -39,28 +48,17 @@ ZigbeeAnalog zbAnalogDevice = ZigbeeAnalog(ANALOG_DEVICE_ENDPOINT_NUMBER);
 void calcFlowRate() {
   unsigned long currentTime = millis();  // Get the current time
   //------------------------------ Flow Sensor ------------------------------//
-  // Calculate flow rate in liters per minute
-  double flowRate = (pulseCount / pulsesPerLiter) * 60.0;
+  double flowRate = (pulseCount / pulsesPerLiter) * 60.0;   // Calculate flow rate in liters per minute
 
-  // Calculate total volume in liters
-  totalLiters += (pulseCount / pulsesPerLiter);
+  totalLiters += (pulseCount / pulsesPerLiter);   // Calculate total volume in liters
 
-  // Reset pulse count for the next second
-  pulseCount = 0;
+  pulseCount = 0;   // Reset pulse count for the next second
 
   // Update last time
   lastTime = currentTime;
   Serial1.printf("Updating flow sensor value to %.3f L/min\r\n", flowRate);
   Serial.printf("Updating flow sensor value to %.3f L/min\r\n", flowRate);
-  //zbAnalogDevice.setFlow(flowRate);
-  if (counter > 10) {
-    counter = 0;
-  } else {
-    counter = counter + 1.234;
-  }
-  zbAnalogDevice.setAnalogInput(counter);
-  Serial1.printf("Flow-Sensor (DEMO): %d \n", counter);
-  Serial.printf("Flow-Sensor (DEMO): %d \n", counter);
+  zbAnalogDevice.setAnalogInput(flowRate);
 }
 
 void calcBattery() {
@@ -71,8 +69,9 @@ void calcBattery() {
     delay(50);                          // Small delay to allow ADC to stabilize
   }
   float Vbattf = 2 * Vbatt / 16 / 1000.0;          // Adjust for 1:2 divider and convert to volts
-  Serial1.printf("Battery: %0.3f V\r\n", Vbattf);  // Output voltage to 3 decimal places
-  Serial.printf("Battery: %0.3f V\r\n", Vbattf);   // Output voltage to 3 decimal places
+  Vbattf = round(Vbattf*100)/100;  //round float to one digit after comma
+  Serial1.printf("Battery: %0.2f V\r\n", Vbattf);  // Output voltage to 3 decimal places
+  Serial.printf("Battery: %0.2f V\r\n", Vbattf);   // Output voltage to 3 decimal places
 
   int battPercentage = round(123 - 123 / pow((1 + pow(Vbattf / 3.7, 80)), 0.165));
   Serial1.printf("Battery: %d %% \r\n", battPercentage);  // Output voltage to 3 decimal places
@@ -89,7 +88,6 @@ void flashLED() {
 }
 
 void measureAndSleep() {
-
   calcFlowRate();
   calcBattery();
 
@@ -102,13 +100,15 @@ void measureAndSleep() {
 
   // Add small delay to allow the data to be sent before going to sleep
   delay(500);
-
-  // Put device to deep sleep
-  Serial1.println("Going to sleep now");
-  Serial1.flush();
-  Serial.println("Going to sleep now");
-  Serial.flush();
-  esp_deep_sleep_start();
+  //check of another pulse is coming from the sensor. If no, go to sleep
+  if(digitalRead(wakeupPin) == LOW){
+    // Put device to deep sleep
+    Serial1.println("Going to sleep now");
+    Serial1.flush();
+    Serial.println("Going to sleep now");
+    Serial.flush();
+    esp_deep_sleep_start();
+  }
 }
 
 /*
@@ -134,8 +134,7 @@ void print_wakeup_reason() {
 //------------------------------ setup() ------------------------------//
 //------------------------------------------------------------//
 void setup() {
-  //Serial1.begin(115200, SERIAL_8N1, RX1PIN, TX1PIN);
-  Serial1.begin(115200, SERIAL_8N1, D7, D6);
+  Serial1.begin(115200, SERIAL_8N1, D7, D6);   //Serial1.begin(115200, SERIAL_8N1, RX1PIN, TX1PIN);
   Serial.begin(115200);
 
   Serial.println();
@@ -148,10 +147,13 @@ void setup() {
   //Print the wakeup reason for ESP32
   print_wakeup_reason();
 
-  // Configure the wake up source and set to wake up every 5 seconds
+  // Configure the wake up source and set to wake up every X seconds
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
   Serial1.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) + " Seconds");
   Serial.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) + " Seconds");
+
+  //If you were to use ext1, you would use it like
+  esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK,ESP_EXT1_WAKEUP_ANY_HIGH);
 
   // Init Battery voltage readout
   pinMode(A0, INPUT);  // Configure A0 as ADC input
@@ -169,7 +171,7 @@ void setup() {
   zbAnalogDevice.setPowerSource(ZB_POWER_SOURCE_BATTERY, 100);
   // Add endpoints to Zigbee Core
   Zigbee.addEndpoint(&zbAnalogDevice);
-  // Create a custom Zigbee configuration for End Device wvith keep alive 10s to aoid interference with reporting data
+  // Create a custom Zigbee configuration for End Device wvith keep alive 10s to aoid
   esp_zb_cfg_t zigbeeConfig = ZIGBEE_DEFAULT_ED_CONFIG();
   zigbeeConfig.nwk_cfg.zed_cfg.keep_alive = 10000;
   // For battery powered devices, it can be better to set timeout for Zigbee Begin to lower value to save battery
